@@ -11,14 +11,18 @@ import scala.concurrent.{Future}
 class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
   implicit val db: ReadWriteDB = mock[ReadWriteDB]
 
-  val readQueryHelper  = toQuery(Samples.readAction)
-  val writeQueryHelper = toQuery(Samples.writeAction)
-  val rawQueryHelper   = toQuery(Samples.rawAction)
+  val readQueryHelper   = toQuery(Samples.readAction)
+  val writeQueryHelper  = toQuery(Samples.writeAction)
+  val rawQueryHelper    = toQuery(Samples.rawAction)
+  val mixed1QueryHelper = toQuery(Samples.mixedAction1)
+  val mixed2QueryHelper = toQuery(Samples.mixedAction2)
 
   "Different DBIOActions" should "match their own HandyQuery-s" in {
     assert(readQueryHelper.isInstanceOf[ReadQuery[Samples.Coffee]])
     assert(writeQueryHelper.isInstanceOf[WriteQuery[Int]])
     assert(rawQueryHelper.isInstanceOf[RawQuery[String]])
+    assert(mixed1QueryHelper.isInstanceOf[MixedQuery[String]])
+    assert(mixed2QueryHelper.isInstanceOf[MixedQuery[String]])
   }
 
   "Only read queries" should "be called on replica" in {
@@ -87,8 +91,10 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
     }
 
     handyQuery.fValueOr.value.map {
-      case Left(NotFound(_)) => assert(true)
-      case _                 => assert(false)
+      case Left(q @ NotFound(_)) =>
+        assert(q.toString.contains("/src/test/scala/tests.scala"))
+
+      case _ => assert(false)
     }
   }
 

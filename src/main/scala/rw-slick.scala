@@ -2,6 +2,7 @@ import Utils.RwDummies._
 import cats.data.EitherT
 import cats.implicits._
 import slick.dbio.{DBIOAction, Effect, NoStream}
+import slick.util.DumpInfo
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.higherKinds
@@ -9,10 +10,25 @@ import scala.util.control.NonFatal
 
 package object RwSlick {
 
-  trait DatabaseError
+  type FileAddress = String
+  type Line        = Int
 
-  case class NotFound(typeName: String)                 extends DatabaseError
-  case class QueryError(e: Throwable, dumpInfo: String) extends DatabaseError
+  type DebuggingInfo = (FileAddress, Line)
+
+  trait DatabaseError {
+    def dumpInfo: DumpInfo
+    val debuggingInfo: DebuggingInfo
+
+    override def toString = {
+      s"""Query crashed with following information:
+  File: ${debuggingInfo._1}
+  Line: ${debuggingInfo._2}
+And following slick info: ${dumpInfo.toString}""".stripMargin
+    }
+  }
+
+  case class NotFound(dumpInfo: DumpInfo)(val debuggingInfo: DebuggingInfo)                 extends DatabaseError
+  case class QueryError(e: Throwable, dumpInfo: DumpInfo)(val debuggingInfo: DebuggingInfo) extends DatabaseError
 
   type BaseQueryT[R] = DBIOAction[R, NoStream, _]
 
@@ -29,6 +45,7 @@ package object RwSlick {
   type ReadQueryT[R]  = MyDataBaseIO[R, Effect.Read]
   type WriteQueryT[R] = MyDataBaseIO[R, Effect.Write]
   type RawQueryT[R]   = MyDataBaseIO[R, Effect]
+  type MixedQueryT[R] = MyDataBaseIO[R, Effect.Read with Effect.Write]
 
   trait DatabaseHandler {
     def run[R](query: BaseQueryT[R]): Future[R]
@@ -41,12 +58,14 @@ package object RwSlick {
 
     def runReplica[R](query: ReadQueryT[R]#ActionType) = readerDB.run(query)
 
-    def runMaster[R](query: WriteQueryT[R]#ActionType)                       = writerDb.run(query)
-    def runMaster[R](query: RawQueryT[R]#ActionType)(implicit dummy: Dummy1) = writerDb.run(query)
+    def runMaster[R](query: WriteQueryT[R]#ActionType)                         = writerDb.run(query)
+    def runMaster[R](query: RawQueryT[R]#ActionType)(implicit dummy: Dummy1)   = writerDb.run(query)
+    def runMaster[R](query: MixedQueryT[R]#ActionType)(implicit dummy: Dummy2) = writerDb.run(query)
 
     def run[R](query: ReadQueryT[R]#ActionType)(implicit dummy: Dummy1)  = runReplica(query)
     def run[R](query: WriteQueryT[R]#ActionType)(implicit dummy: Dummy2) = runMaster(query)
     def run[R](query: RawQueryT[R]#ActionType)(implicit dummy: Dummy3)   = runMaster(query)
+    def run[R](query: MixedQueryT[R]#ActionType)(implicit dummy: Dummy4) = runMaster(query)
 
     def runRawReplica[R](query: RawQueryT[R]#ActionType) = readerDB.run(query)
   }
@@ -56,12 +75,12 @@ package object RwSlick {
 
     def toQuery[R](query: WriteQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB, dummy: Dummy1) =
       WriteQuery(query)
-
     def toQuery[R](query: ReadQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB, dummy: Dummy2) =
       ReadQuery(query)
-
     def toQuery[R](query: RawQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB, dummy: Dummy3) =
       RawQuery(query)
+    def toQuery[R](query: MixedQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB, dummy: Dummy4) =
+      MixedQuery(query)
   }
 
   trait HandyQuery[QueryT <: DataBaseIO] {
@@ -71,48 +90,53 @@ package object RwSlick {
     final type ResultT     = EitherT[Future, DatabaseError, R]
     final type FetchResult = Future[R]
 
-    protected def query: QueryT#ActionType
+    def query: QueryT#ActionType
 
     def db: ReadWriteDB
     implicit def ec: ExecutionContext
-
-    lazy val fValueOr: ResultT = EitherT(this.runWithRecovery)
-
     protected def run: FetchResult
 
-    protected def runWithRecovery: Result = {
-      val f: Result = run map Right[DatabaseError, R]
+    def fValueOr(implicit fileDbg: sourcecode.File, lineDbg: sourcecode.Line): ResultT = {
+      EitherT {
+        val f: Result              = this.fetch map Right[DatabaseError, R]
+        val dbgInfo: DebuggingInfo = (fileDbg.value, lineDbg.value)
 
-      f recover {
-        case _: java.util.NoSuchElementException => {
-          val info = query.getDumpInfo.toString
-          Left(NotFound(info))
+        f recover {
+          case _: java.util.NoSuchElementException =>
+            Left(NotFound(query.getDumpInfo)(dbgInfo))
+          case NonFatal(e) =>
+            Left(QueryError(e, query.getDumpInfo)(dbgInfo))
         }
-
-        case NonFatal(e) => Left(QueryError(e, query.getDumpInfo.toString))
       }
     }
 
     def fetchOpt: Future[Option[R]] = this.fValueOr.toOption.value
-
-    def fetch: FetchResult = fetchOpt.map(_.get)
+    lazy val fetch: FetchResult     = this.run
   }
 
-  case class WriteQuery[T](protected val query: WriteQueryT[T]#ActionType)(
+  case class WriteQuery[T](query: WriteQueryT[T]#ActionType)(
       implicit val ec: ExecutionContext,
       val db: ReadWriteDB
   ) extends HandyQuery[WriteQueryT[T]] {
     override def run = db.runMaster(query)
   }
 
-  case class ReadQuery[T](protected val query: ReadQueryT[T]#ActionType)(
+  case class ReadQuery[T](query: ReadQueryT[T]#ActionType)(
       implicit val ec: ExecutionContext,
       val db: ReadWriteDB
   ) extends HandyQuery[ReadQueryT[T]] {
     override def run: FetchResult = db.runReplica(query)
   }
 
-  case class RawQuery[T](protected val query: RawQueryT[T]#ActionType)(
+  case class MixedQuery[T](query: MixedQueryT[T]#ActionType)(
+      implicit val ec: ExecutionContext,
+      val db: ReadWriteDB
+  ) extends HandyQuery[MixedQueryT[T]] {
+    import Utils.RwDummies._
+    override def run: FetchResult = db.runMaster(query)
+  }
+
+  case class RawQuery[T](query: RawQueryT[T]#ActionType)(
       implicit val ec: ExecutionContext,
       val db: ReadWriteDB
   ) extends HandyQuery[RawQueryT[T]] {
@@ -120,7 +144,7 @@ package object RwSlick {
     override def run: FetchResult = db.runMaster(query)
   }
 
-  case class RawQueryOnReplica[T](protected val query: RawQueryT[T]#ActionType)(
+  case class RawQueryOnReplica[T](query: RawQueryT[T]#ActionType)(
       implicit val ec: ExecutionContext,
       val db: ReadWriteDB
   ) extends HandyQuery[RawQueryT[T]] {

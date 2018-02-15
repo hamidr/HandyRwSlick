@@ -1,5 +1,6 @@
 import slick.jdbc.SQLiteProfile.api._
-import scala.concurrent.ExecutionContext.Implicits.global
+
+import scala.concurrent.ExecutionContext
 
 package object Samples {
 
@@ -18,5 +19,18 @@ package object Samples {
   val writeAction = coffees.filter(_.name === "test").map(_.name).update("test2")
 
   val rawAction = sql"select name from coffees where name = 'hello'".as[String].head
+  def mixedAction1(implicit executionContext: ExecutionContext) = {
+    for {
+      _ <- writeAction
+      _ <- readAction
+    } yield ""
+  }
+
+  def mixedAction2(implicit executionContext: ExecutionContext) = {
+    for {
+      _ <- readAction
+      _ <- writeAction
+    } yield ""
+  }
 
 }
