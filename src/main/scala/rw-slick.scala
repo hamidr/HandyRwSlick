@@ -17,7 +17,7 @@ package object RwSlick {
 
   trait DatabaseError {
     def dumpInfo: DumpInfo
-    val debuggingInfo: DebuggingInfo
+    def debuggingInfo: DebuggingInfo
 
     override def toString = {
       s"""Query crashed with following information:
