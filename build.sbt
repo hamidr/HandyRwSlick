@@ -1,7 +1,8 @@
 name := "rw-slick"
 
-version := "0.1"
+version := "0.2"
 
+isSnapshot := true
 scalaVersion := "2.12.4"
 
 libraryDependencies ++= Seq(
@@ -15,10 +16,35 @@ libraryDependencies ++= Seq(
 
 )
 
-publishTo := {
-  val nexus = "https://my.artifact.repo.net/"
-  if (isSnapshot.value)
-    Some("snapshots" at nexus + "content/repositories/snapshots")
-  else
-    Some("releases"  at nexus + "service/local/staging/deploy/maven2")
-}
+organization := "com.snapptrip"
+homepage := Some(url("https://github.com/hamidr/HandyRwSlick"))
+pomExtra :=
+  <scm>
+    <connection>
+      scm:git:git://github.com/hamidr/HandyRwSlick.git
+    </connection>
+    <url>
+	https://github.com/hamidr/HandyRwSlick
+    </url>
+  </scm>
+    <developers>
+      <developer>
+        <id>hamidr</id>
+        <name>Hamidreza Davoodi</name>
+        <email>hamidr.dev@gmail.com</email>
+      </developer>
+    </developers>
+
+resolvers += "typesafe" at "http://repo.typesafe.com/typesafe/releases/"
+resolvers += Resolver.jcenterRepo
+
+publishTo := Some(
+  "bintray" at
+    "https://api.bintray.com/maven/hamidr/HandyRwSlick/HandyRwSlick/;publish=1")
+credentials += Credentials(Path.userHome / ".bintray" / ".credentials")
+
+publishMavenStyle := true
+
+publishArtifact in Test := false
+
+licenses += ("MIT", url("http://opensource.org/licenses/MIT"))

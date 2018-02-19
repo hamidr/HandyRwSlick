@@ -15,7 +15,9 @@ package object RwSlick {
 
   type DebuggingInfo = (FileAddress, Line)
 
-  trait DatabaseError {
+  trait BaseError
+
+  trait DatabaseError extends BaseError {
     def dumpInfo: DumpInfo
     def debuggingInfo: DebuggingInfo
 
