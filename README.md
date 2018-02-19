@@ -67,4 +67,4 @@ And you can use the queries with `userRepo.findBy(1).fValueOr` in order to run t
 it will either is going to get complete or will return an error which has the reason and the line it was caused.
 
 # License
-GPLv3 - credit to Snapptrip.com
+MIT - credit to Snapptrip.com
