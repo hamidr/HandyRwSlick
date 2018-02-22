@@ -92,11 +92,11 @@ And following slick info: ${dumpInfo.toString}""".stripMargin
       def query: HandyQuery[R]
       def dbError(error: RwSlick.BaseError): ReturnType
 
-      def runQuery(
+      def fValueOr(
           implicit ec: ExecutionContext,
           fileDbg: sourcecode.File,
           lineDbg: sourcecode.Line
-      ): EitherT[Future, ReturnType, R] = query.fValueOr(fileDbg, lineDbg).leftMap(dbError)
+      ): EitherT[Future, ReturnType, R] = query.runQuery((fileDbg.value, lineDbg.value)).leftMap(dbError)
     }
   }
 
@@ -113,10 +113,12 @@ And following slick info: ${dumpInfo.toString}""".stripMargin
     implicit def ec: ExecutionContext
     protected def run: FetchResult
 
-    def fValueOr(implicit fileDbg: sourcecode.File, lineDbg: sourcecode.Line): ResultT = {
+    def runQuery(implicit fileDbg: sourcecode.File, lineDbg: sourcecode.Line): ResultT =
+      this.runQuery((fileDbg.value, lineDbg.value))
+
+    def runQuery(dbgInfo: DebuggingInfo): ResultT = {
       EitherT {
-        val f: Result              = this.fetch map (_.asRight)
-        val dbgInfo: DebuggingInfo = (fileDbg.value, lineDbg.value)
+        val f: Result = this.fetch map (_.asRight)
 
         f recover {
           case _: java.util.NoSuchElementException =>
@@ -127,7 +129,7 @@ And following slick info: ${dumpInfo.toString}""".stripMargin
       }
     }
 
-    def fetchOpt: Future[Option[R]] = this.fValueOr.toOption.value
+    def fetchOpt: Future[Option[R]] = this.runQuery.toOption.value
     lazy val fetch: FetchResult     = this.run
   }
 

@@ -68,7 +68,7 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
     }
   }
 
-  "fValueOr in HandyQueries" should "return Right if DB works" in {
+  "runQuery in HandyQueries" should "return Right if DB works" in {
     import cats.implicits._
     implicit val db: ReadWriteDB = mock[ReadWriteDB]
     when(db.runReplica(Samples.readAction)) thenReturn Future.successful(Coffee(name = "it works", price = 666))
@@ -77,13 +77,13 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
       toQuery(Samples.readAction)
     }
 
-    handyQuery.fValueOr.map(_.name).getOrElse("it doesn't work") map { v =>
+    handyQuery.runQuery.map(_.name).getOrElse("it doesn't work") map { v =>
       assert(v == "it works")
       assert(v != "it doesn't work")
     }
   }
 
-  "fValueOr in HandyQueries for $query.head" should "be Left with NotFound if DB the returned sequence is empty" in {
+  "runQuery in HandyQueries for $query.head" should "be Left with NotFound if DB the returned sequence is empty" in {
     implicit val db: ReadWriteDB = mock[ReadWriteDB]
     when(db.runReplica(Samples.readAction)) thenReturn Future.failed(new java.util.NoSuchElementException)
 
@@ -91,7 +91,7 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
       toQuery(Samples.readAction)
     }
 
-    handyQuery.fValueOr.value.map {
+    handyQuery.runQuery.value.map {
       case Left(q @ NotFound(_)) =>
         assert(q.toString.contains("/src/test/scala/tests.scala"))
 
@@ -99,7 +99,7 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
     }
   }
 
-  "fValueOr in HandyQueries for unknown exceptions" should "return Left with QueryError" in {
+  "runQuery in HandyQueries for unknown exceptions" should "return Left with QueryError" in {
     implicit val db: ReadWriteDB = mock[ReadWriteDB]
     when(db.runReplica(Samples.readAction)) thenReturn Future.failed(new Exception("hello world!"))
 
@@ -107,7 +107,7 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
       toQuery(Samples.readAction)
     }
 
-    handyQuery.fValueOr.value.map {
+    handyQuery.runQuery.value.map {
       case Left(QueryError(_, _)) => assert(true)
       case _                      => assert(false)
     }
@@ -140,11 +140,11 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
 
     val w = for {
       y <- eitherTee
-      x <- handyQuery.runQuery //line 144 for tests
+      x <- handyQuery.fValueOr //line 144 for tests
     } yield ()
 
     val z = for {
-      x <- handyQuery.runQuery
+      x <- handyQuery.fValueOr
       y <- eitherTee
     } yield ()
 
@@ -157,7 +157,7 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
     }
   }
 
-  "runQuery" should "return the defined type in the HandyQuery" in {
+  "fValueOr" should "return the defined type in the HandyQuery" in {
     import cats.implicits._
 
     trait MyBaseError
@@ -173,7 +173,7 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
       override def dbError(error: BaseError): MyBaseError = DbError(error)
     }
 
-    handyQuery.runQuery.value map {
+    handyQuery.fValueOr.value map {
       case Right(e) => assert(e.price == 666)
       case _        => assert(false)
     }
