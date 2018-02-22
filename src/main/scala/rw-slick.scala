@@ -86,26 +86,26 @@ And following slick info: ${dumpInfo.toString}""".stripMargin
     def toQuery[R](query: MixedQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB, dummy: Dummy4) =
       MixedQuery(query)
 
-    trait QueryWrapper {
-      def query: HandyQuery[_]
+    trait QueryWrapper[R] {
       type ReturnType
+
+      def query: HandyQuery[R]
       def dbError(error: RwSlick.BaseError): ReturnType
 
       def runQuery(
           implicit ec: ExecutionContext,
           fileDbg: sourcecode.File,
           lineDbg: sourcecode.Line
-      ): EitherT[Future, ReturnType, _] =
-        query.fValueOr(fileDbg, lineDbg).leftMap(dbError)
+      ): EitherT[Future, ReturnType, R] = query.fValueOr(fileDbg, lineDbg).leftMap(dbError)
     }
   }
 
-  trait HandyQuery[QueryT <: DataBaseIO] {
+  sealed trait HandyQuery[R] extends AnyRef {
+    type QueryT <: DataBaseIO
 
-    final type R           = QueryT#R
+    final type FetchResult = Future[R]
     final type Result      = Future[Either[BaseError, R]]
     final type ResultT     = AsyncResultT[R]
-    final type FetchResult = Future[R]
 
     def query: QueryT#ActionType
 
@@ -131,24 +131,40 @@ And following slick info: ${dumpInfo.toString}""".stripMargin
     lazy val fetch: FetchResult     = this.run
   }
 
+  trait HandyWrite[T] extends HandyQuery[T] {
+    type QueryT = WriteQueryT[T]
+  }
+
+  trait HandyRead[T] extends HandyQuery[T] {
+    type QueryT = ReadQueryT[T]
+  }
+
+  trait HandyMixed[T] extends HandyQuery[T] {
+    type QueryT = MixedQueryT[T]
+  }
+
+  trait HandyRaw[T] extends HandyQuery[T] {
+    type QueryT = RawQueryT[T]
+  }
+
   case class WriteQuery[T](query: WriteQueryT[T]#ActionType)(
       implicit val ec: ExecutionContext,
       val db: ReadWriteDB
-  ) extends HandyQuery[WriteQueryT[T]] {
+  ) extends HandyWrite[T] {
     override def run = db.runMaster(query)
   }
 
   case class ReadQuery[T](query: ReadQueryT[T]#ActionType)(
       implicit val ec: ExecutionContext,
       val db: ReadWriteDB
-  ) extends HandyQuery[ReadQueryT[T]] {
+  ) extends HandyRead[T] {
     override def run: FetchResult = db.runReplica(query)
   }
 
   case class MixedQuery[T](query: MixedQueryT[T]#ActionType)(
       implicit val ec: ExecutionContext,
       val db: ReadWriteDB
-  ) extends HandyQuery[MixedQueryT[T]] {
+  ) extends HandyMixed[T] {
     import Utils.RwDummies._
     override def run: FetchResult = db.runMaster(query)
   }
@@ -156,7 +172,7 @@ And following slick info: ${dumpInfo.toString}""".stripMargin
   case class RawQuery[T](query: RawQueryT[T]#ActionType)(
       implicit val ec: ExecutionContext,
       val db: ReadWriteDB
-  ) extends HandyQuery[RawQueryT[T]] {
+  ) extends HandyRaw[T] {
     import Utils.RwDummies._
     override def run: FetchResult = db.runMaster(query)
   }
@@ -164,7 +180,7 @@ And following slick info: ${dumpInfo.toString}""".stripMargin
   case class RawQueryOnReplica[T](query: RawQueryT[T]#ActionType)(
       implicit val ec: ExecutionContext,
       val db: ReadWriteDB
-  ) extends HandyQuery[RawQueryT[T]] {
+  ) extends HandyRaw[T] {
     override def run: FetchResult = db.runRawReplica(query)
   }
 

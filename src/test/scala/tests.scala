@@ -133,7 +133,7 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
       toQuery(Samples.readAction)
     }
 
-    implicit class queryWrapper(val query: HandyQuery[_]) extends QueryWrapper {
+    implicit class queryWrapper[T](val query: HandyQuery[T]) extends QueryWrapper[T] {
       override type ReturnType = MyBaseError
       override def dbError(error: BaseError): MyBaseError = DbError(error)
     }
@@ -152,9 +152,30 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
       x <- w
       y <- z
     } yield ()).value map {
-      case Left(DbError(e)) => assert(e.toString.contains("Line: 144"))
+      case Left(DbError(e)) => assert(e.toString.contains("Line: 143"))
       case _                => assert(false)
     }
-    assert(true)
+  }
+
+  "runQuery" should "return the defined type in the HandyQuery" in {
+    import cats.implicits._
+
+    trait MyBaseError
+    case class DbError(error: RwSlick.BaseError) extends MyBaseError
+
+    implicit val db: ReadWriteDB = mock[ReadWriteDB]
+    when(db.runReplica(Samples.readAction)) thenReturn Future.successful(Coffee(name = "it works", price = 666))
+
+    val handyQuery = toQuery(Samples.readAction)
+
+    implicit class queryWrapper[T](val query: HandyQuery[T]) extends QueryWrapper[T] {
+      override type ReturnType = MyBaseError
+      override def dbError(error: BaseError): MyBaseError = DbError(error)
+    }
+
+    handyQuery.runQuery.value map {
+      case Right(e) => assert(e.price == 666)
+      case _        => assert(false)
+    }
   }
 }
