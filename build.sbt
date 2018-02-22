@@ -1,6 +1,6 @@
 name := "rw-slick"
 
-version := "0.5"
+version := "0.5.1"
 
 isSnapshot := true
 scalaVersion := "2.12.4"

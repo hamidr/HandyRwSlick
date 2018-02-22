@@ -64,7 +64,7 @@ Using EitherT and stacking Either and Future (http://eed3si9n.com/herding-cats/m
     }
   }
 ```
-And you can use the queries with `userRepo.findBy(1).fValueOr` in order to run the database action and
+And you can use the queries with `userRepo.findBy(1).runQuery` in order to run the database action and
 it will either is going to get complete or will return an error which has the reason and the line it was caused.
 
 # License

@@ -1,6 +1,3 @@
-import scala.concurrent.Future
-import cats.data.EitherT
-
 package object Utils {
 
   object RwDummies {
@@ -18,5 +15,4 @@ package object Utils {
     implicit def dummy5 = Dummy5()
     implicit def dummy6 = Dummy6()
   }
-
 }
