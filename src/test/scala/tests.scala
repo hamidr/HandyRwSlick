@@ -2,11 +2,12 @@ import org.scalatest._
 import RwSlick.QueryHelper._
 import RwSlick._
 import Samples.Coffee
+import cats.data.EitherT
 import org.scalatest.mockito.MockitoSugar
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
 
-import scala.concurrent.{Future}
+import scala.concurrent.Future
 
 class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
   implicit val db: ReadWriteDB = mock[ReadWriteDB]
@@ -110,5 +111,40 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
       case Left(QueryError(_, _)) => assert(true)
       case _                      => assert(false)
     }
+  }
+
+  "fValueOr in HandyQueries" should "be usable with other Errors" in {
+    import cats.implicits._
+    trait MyBaseError
+    case class DbError(error: RwSlick.BaseError) extends MyBaseError
+
+    type AsyncResultT[R] = EitherT[Future, MyBaseError, R]
+    val f: Future[Unit] = Future.successful(())
+
+    val eitherTee: AsyncResultT[Unit] = EitherT.liftF[Future, MyBaseError, Unit](f)
+
+    implicit val db: ReadWriteDB = mock[ReadWriteDB]
+    when(db.runReplica(Samples.readAction)) thenReturn Future.successful(Coffee(name = "it works", price = 666))
+
+    val handyQuery = {
+      toQuery(Samples.readAction)
+    }
+
+    implicit def fvalueOrToBaseError[T](asyncResultT: RwSlick.AsyncResultT[T]): AsyncResultT[T] = {
+      asyncResultT.leftMap { e =>
+        DbError(e)
+      }
+    }
+
+    val w: AsyncResultT[Unit] = for {
+      y <- eitherTee
+      x <- handyQuery.fValueOr
+    } yield ()
+
+    val z: AsyncResultT[Unit] = for {
+      x <- handyQuery.fValueOr
+    } yield ()
+
+    assert(true)
   }
 }

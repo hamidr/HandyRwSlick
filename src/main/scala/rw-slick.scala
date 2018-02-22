@@ -15,9 +15,11 @@ package object RwSlick {
 
   type DebuggingInfo = (FileAddress, Line)
 
-  trait BaseError
+  sealed trait BaseError
 
-  trait DatabaseError extends BaseError {
+  type AsyncResultT[T] = EitherT[Future, BaseError, T]
+
+  sealed trait DatabaseError extends BaseError {
     def dumpInfo: DumpInfo
     def debuggingInfo: DebuggingInfo
 
@@ -88,8 +90,8 @@ And following slick info: ${dumpInfo.toString}""".stripMargin
   trait HandyQuery[QueryT <: DataBaseIO] {
 
     final type R           = QueryT#R
-    final type Result      = Future[Either[DatabaseError, R]]
-    final type ResultT     = EitherT[Future, DatabaseError, R]
+    final type Result      = Future[Either[BaseError, R]]
+    final type ResultT     = AsyncResultT[R]
     final type FetchResult = Future[R]
 
     def query: QueryT#ActionType
@@ -100,14 +102,14 @@ And following slick info: ${dumpInfo.toString}""".stripMargin
 
     def fValueOr(implicit fileDbg: sourcecode.File, lineDbg: sourcecode.Line): ResultT = {
       EitherT {
-        val f: Result              = this.fetch map Right[DatabaseError, R]
+        val f: Result              = this.fetch map (_.asRight)
         val dbgInfo: DebuggingInfo = (fileDbg.value, lineDbg.value)
 
         f recover {
           case _: java.util.NoSuchElementException =>
-            Left(NotFound(query.getDumpInfo)(dbgInfo))
+            NotFound(query.getDumpInfo)(dbgInfo).asLeft
           case NonFatal(e) =>
-            Left(QueryError(e, query.getDumpInfo)(dbgInfo))
+            QueryError(e, query.getDumpInfo)(dbgInfo).asLeft
         }
       }
     }
