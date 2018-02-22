@@ -85,6 +85,19 @@ And following slick info: ${dumpInfo.toString}""".stripMargin
       RawQuery(query)
     def toQuery[R](query: MixedQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB, dummy: Dummy4) =
       MixedQuery(query)
+
+    trait QueryWrapper {
+      def query: HandyQuery[_]
+      type ReturnType
+      def dbError(error: RwSlick.BaseError): ReturnType
+
+      def runQuery(
+          implicit ec: ExecutionContext,
+          fileDbg: sourcecode.File,
+          lineDbg: sourcecode.Line
+      ): EitherT[Future, ReturnType, _] =
+        query.fValueOr(fileDbg, lineDbg).leftMap(dbError)
+    }
   }
 
   trait HandyQuery[QueryT <: DataBaseIO] {

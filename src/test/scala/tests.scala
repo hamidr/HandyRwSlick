@@ -7,7 +7,7 @@ import org.scalatest.mockito.MockitoSugar
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
   implicit val db: ReadWriteDB = mock[ReadWriteDB]
@@ -115,36 +115,46 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
 
   "fValueOr in HandyQueries" should "be usable with other Errors" in {
     import cats.implicits._
+
     trait MyBaseError
     case class DbError(error: RwSlick.BaseError) extends MyBaseError
 
     type AsyncResultT[R] = EitherT[Future, MyBaseError, R]
     val f: Future[Unit] = Future.successful(())
 
+    import scala.concurrent.Future
+
     val eitherTee: AsyncResultT[Unit] = EitherT.liftF[Future, MyBaseError, Unit](f)
 
     implicit val db: ReadWriteDB = mock[ReadWriteDB]
-    when(db.runReplica(Samples.readAction)) thenReturn Future.successful(Coffee(name = "it works", price = 666))
+    when(db.runReplica(Samples.readAction)) thenReturn Future.failed(new Exception("hello world!"))
 
     val handyQuery = {
       toQuery(Samples.readAction)
     }
 
-    implicit def fvalueOrToBaseError[T](asyncResultT: RwSlick.AsyncResultT[T]): AsyncResultT[T] = {
-      asyncResultT.leftMap { e =>
-        DbError(e)
-      }
+    implicit class queryWrapper(val query: HandyQuery[_]) extends QueryWrapper {
+      override type ReturnType = MyBaseError
+      override def dbError(error: BaseError): MyBaseError = DbError(error)
     }
 
-    val w: AsyncResultT[Unit] = for {
+    val w = for {
       y <- eitherTee
-      x <- handyQuery.fValueOr
+      x <- handyQuery.runQuery //line 144 for tests
     } yield ()
 
-    val z: AsyncResultT[Unit] = for {
-      x <- handyQuery.fValueOr
+    val z = for {
+      x <- handyQuery.runQuery
+      y <- eitherTee
     } yield ()
 
+    (for {
+      x <- w
+      y <- z
+    } yield ()).value map {
+      case Left(DbError(e)) => assert(e.toString.contains("Line: 144"))
+      case _                => assert(false)
+    }
     assert(true)
   }
 }
