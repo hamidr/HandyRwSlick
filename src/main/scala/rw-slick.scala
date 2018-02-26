@@ -25,14 +25,15 @@ package object RwSlick {
 
     override def toString = {
       s"""Query crashed with following information:
-  File: ${debuggingInfo._1}
-  Line: ${debuggingInfo._2}
-And following slick info: ${dumpInfo.toString}""".stripMargin
+${this.getClass.getSimpleName} - ${debuggingInfo._1}:${debuggingInfo._2}
+Slick Dump Info: ${dumpInfo.toString}""".stripMargin
     }
   }
 
   case class NotFound(dumpInfo: DumpInfo)(val debuggingInfo: DebuggingInfo)                 extends DatabaseError
-  case class QueryError(e: Throwable, dumpInfo: DumpInfo)(val debuggingInfo: DebuggingInfo) extends DatabaseError
+  case class QueryError(e: Throwable, dumpInfo: DumpInfo)(val debuggingInfo: DebuggingInfo) extends DatabaseError {
+    override def toString: String = s"${super.toString}\nException: ${e}"
+  }
 
   type BaseQueryT[R] = DBIOAction[R, NoStream, _]
 

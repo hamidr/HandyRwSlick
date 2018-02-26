@@ -152,7 +152,7 @@ class ExampleSpec extends AsyncFlatSpec with MockitoSugar {
       x <- w
       y <- z
     } yield ()).value map {
-      case Left(DbError(e)) => assert(e.toString.contains("Line: 143"))
+      case Left(DbError(e)) => assert(e.toString.contains("tests.scala:143"))
       case _                => assert(false)
     }
   }
