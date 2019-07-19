@@ -48,7 +48,7 @@ This might seem naive but since that's all we needed so it is prefect for our go
 ```
 
 2. So far we did not mention any specific approach regarding handling errors.
-Have you heard about `cats` library? If not then don't call yourself a scala developer.
+You should have heard about `cats` library by now if not I don't know what to say.
 Using EitherT and stacking Either and Future (http://eed3si9n.com/herding-cats/monad-transfomers.html) we can write clean for-comprehensions.
 - First wrap your queries around a HandyQuery with `toQuery` functionality which is going to provide following interface for you:
 ```scala
@@ -66,6 +66,9 @@ Using EitherT and stacking Either and Future (http://eed3si9n.com/herding-cats/m
 ```
 And you can use the queries with `userRepo.findBy(1).runQuery` in order to run the database action and
 it will either is going to get complete or will return an error which has the reason and the line it was caused.
+
+# A note about this project:
+I haven't touched a single line of this library in years! Obviously, Today I'd write it in a different way or I'd might not even write it at all. It served its purpose and now I just have it in my resume! Doesn't mean I am proud of it.
 
 # License
 MIT - credit to Snapptrip.com

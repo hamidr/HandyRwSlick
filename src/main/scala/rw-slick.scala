@@ -1,4 +1,3 @@
-import Utils.RwDummies._
 import cats.data.EitherT
 import cats.implicits._
 import slick.dbio.{DBIOAction, Effect, NoStream}
@@ -63,14 +62,14 @@ Slick Dump Info: ${dumpInfo.toString}""".stripMargin
 
     def runReplica[R](query: ReadQueryT[R]#ActionType) = readerDB.run(query)
 
-    def runMaster[R](query: WriteQueryT[R]#ActionType)                         = writerDb.run(query)
-    def runMaster[R](query: RawQueryT[R]#ActionType)(implicit dummy: Dummy1)   = writerDb.run(query)
-    def runMaster[R](query: MixedQueryT[R]#ActionType)(implicit dummy: Dummy2) = writerDb.run(query)
+    def runMaster[R](query: WriteQueryT[R]#ActionType) = writerDb.run(query)
+    def runMaster[R](query: RawQueryT[R]#ActionType)   = writerDb.run(query)
+    def runMaster[R](query: MixedQueryT[R]#ActionType) = writerDb.run(query)
 
-    def run[R](query: ReadQueryT[R]#ActionType)(implicit dummy: Dummy1)  = runReplica(query)
-    def run[R](query: WriteQueryT[R]#ActionType)(implicit dummy: Dummy2) = runMaster(query)
-    def run[R](query: RawQueryT[R]#ActionType)(implicit dummy: Dummy3)   = runMaster(query)
-    def run[R](query: MixedQueryT[R]#ActionType)(implicit dummy: Dummy4) = runMaster(query)
+    def run[R](query: ReadQueryT[R]#ActionType)  = runReplica(query)
+    def run[R](query: WriteQueryT[R]#ActionType) = runMaster(query)
+    def run[R](query: RawQueryT[R]#ActionType)   = runMaster(query)
+    def run[R](query: MixedQueryT[R]#ActionType) = runMaster(query)
 
     def runRawReplica[R](query: RawQueryT[R]#ActionType) = readerDB.run(query)
   }
@@ -78,13 +77,13 @@ Slick Dump Info: ${dumpInfo.toString}""".stripMargin
   object QueryHelper {
     import Utils.RwDummies.{Dummy1, Dummy2, Dummy3, Dummy4}
 
-    def toQuery[R](query: WriteQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB, dummy: Dummy1) =
+    def toQuery[R](query: WriteQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB) =
       WriteQuery(query)
-    def toQuery[R](query: ReadQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB, dummy: Dummy2) =
+    def toQuery[R](query: ReadQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB) =
       ReadQuery(query)
-    def toQuery[R](query: RawQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB, dummy: Dummy3) =
+    def toQuery[R](query: RawQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB) =
       RawQuery(query)
-    def toQuery[R](query: MixedQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB, dummy: Dummy4) =
+    def toQuery[R](query: MixedQueryT[R]#ActionType)(implicit ec: ExecutionContext, db: ReadWriteDB) =
       MixedQuery(query)
 
     trait QueryWrapper[R] {
